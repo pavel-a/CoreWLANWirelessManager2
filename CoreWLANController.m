@@ -1,12 +1,7 @@
-// $$$pa
-//  CoreWLANController.m
-//  CoreWLANWirelessManager
-//  Copyright 2009 Apple, Inc. All rights reserved.
 //
-
 // File: CoreWLANController.m
 // Abstract: Controller class for the CoreWLANWirelessManager application.
-// Version: 2.0
+// Version: 2.0 pa02 10-mar-2015
 //
 
 #import <CoreWLAN/CoreWLAN.h>
@@ -124,20 +119,65 @@
 	return opModeStr;
 }
 
+// From neighbor's CWNetwork, figure out what security it supports:
+static NSString *stringForNeigbSecurity(CWNetwork *neigb)
+{
+    if ([neigb supportsSecurity: kCWSecurityWPA2Personal])
+        return @"WPA2/PSK";
+    if ([neigb supportsSecurity: kCWSecurityNone])
+        return @"Open";
+    if ([neigb supportsSecurity: kCWSecurityWPA2Enterprise])
+        return @"WPA2";
+    if ([neigb supportsSecurity: kCWSecurityWEP])
+        return @"WEP";
+    if ([neigb supportsSecurity: kCWSecurityWPAPersonal])
+        return @"WPA/PSK";
+    if ([neigb supportsSecurity: kCWSecurityWPAEnterprise])
+        return @"WPA/TKIP";
+    if ([neigb supportsSecurity: kCWSecurityWPAPersonalMixed])
+        return @"WPA mixed";
+    //......
+    return @"Other/unknown";
+}
+
+// From neighbor's CWNetwork, figure out its PHY
+static NSString *stringForNeigbPhy(CWNetwork *neigb)
+{
+    NSMutableString *s = [[NSMutableString alloc] initWithCapacity:16];
+    if ([neigb supportsPHYMode: kCWPHYMode11n])
+        [s appendString: @".n"];
+    if ([neigb supportsPHYMode: kCWPHYMode11g])
+        [s appendString: @".g"];
+    if ([neigb supportsPHYMode: kCWPHYMode11ac])
+        [s appendString: @".ac"];
+    if ([neigb supportsPHYMode: kCWPHYMode11a])
+        [s appendString: @".a"];
+    if ([neigb supportsPHYMode: kCWPHYMode11b])
+        [s appendString: @".b"];
+
+    return s;
+}
+
+
+#pragma mark -
+#pragma mark Info display
+
 - (void)updateInterfaceInfoTab
 {
 	NSNumber *num = nil;
 	NSString *str = nil;
 
-    if( !self.wifiClient ) {
+    if( !wifiClient ) {
         return; //self.wifiClient = CWWiFiClient.sharedWiFiClient;
     }
 
-    if ( !self.currentInterface) {
+    if ( !currentInterface) {
         return; //self.currentInterface = self.wifiClient.interface;
     }
-	
-	BOOL powerState = currentInterface.powerOn;
+
+    // Note: most numeric properties of CWInterface return 0 in case of error;
+
+	BOOL powerState = currentInterface.powerOn; /* whether the adapter is powered on */
 	[powerStateControl setSelectedSegment:(powerState ? 0 : 1)];
 	
 	if( currentInterface.serviceActive )
@@ -161,20 +201,20 @@
 	[bssidField setStringValue:((str && powerState) ? str : @"")];
 	
     str = currentInterface.countryCode;
-    [countryCodeField setStringValue:((str && powerState) ? str : @"")];
+    [countryCodeField setStringValue:((str && powerState) ? str : @"n/a")];
 
     num = [NSNumber numberWithDouble: [currentInterface transmitRate]];
-	[txRateField setStringValue:((num && powerState) ? [NSString stringWithFormat:@"%@ Mbps", num] : @"")];
+	[txRateField setStringValue:((num && powerState) ? [NSString stringWithFormat:@"%@ Mbps", num] : @"n/a")];
 	
     num = [NSNumber numberWithLong: [currentInterface rssiValue]];
-	[rssiField setStringValue:((num && powerState) ? [NSString stringWithFormat:@"%@ dBm",[num stringValue]] : @"")];
+	[rssiField setStringValue:((num.integerValue && powerState) ? [NSString stringWithFormat:@"%@ dBm",num] : @"n/a")];
 	
     num = [NSNumber numberWithInteger: [currentInterface noiseMeasurement]];
-	[noiseField setStringValue:((num && powerState) ? [NSString stringWithFormat:@"%@ dBm",[num stringValue]] : @"")];
+	[noiseField setStringValue:((num && powerState) ? [NSString stringWithFormat:@"%@ dBm", num] : @"n/a")];
 
     num = [NSNumber numberWithUnsignedInteger: currentInterface.transmitPower];
-	[txPowerField setStringValue:((num && powerState) ? [NSString stringWithFormat:@"%@ mW", num.stringValue] : @"")];
-	// *** pa01 This is always 0 on my Mini, 10.10 ?? Error?
+	[txPowerField setStringValue:((num.integerValue && powerState) ? [NSString stringWithFormat:@"%@ mW", num] : @"n/a")];
+	// *** pa01 This is always 0 on my Mini, 10.10 Does it mean error?
 
     NSArray *supportedChannelsArray = [[currentInterface supportedWLANChannels] allObjects];
 	NSMutableString *supportedChannelsString = [NSMutableString stringWithCapacity:0];
@@ -223,7 +263,7 @@
 	if( [supportedPHYModesString hasSuffix:@"802.11"] )
 		supportedPHYModesString = [NSMutableString stringWithString:@"None"];
 #endif //----------------------------------------------
-    NSString *supportedPHYModesString = @"unknown";
+    NSString *supportedPHYModesString = @"[N/A]"; // don't know how to get
 	[supportedPHYModesField setStringValue:supportedPHYModesString];
 
     num = [NSNumber numberWithUnsignedInteger:[[currentInterface wlanChannel] channelNumber]];
@@ -239,6 +279,7 @@
 
 - (void)updateScanTab
 {
+    @autoreleasepool {
     bool m = ([mergeScanResultsCheckbox state] == NSOnState);
     NSSet *scanset = [currentInterface cachedScanResults];
 
@@ -253,6 +294,7 @@
                           autorelease ]]];
 
     [scanResultsTable reloadData];
+    }
 }
 
 - (void)resetDialog
@@ -281,12 +323,12 @@
 #pragma mark NSNibAwaking Protocol
 - (void) awakeFromNib
 {
-    if( !self.wifiClient ) {
-        self.wifiClient = CWWiFiClient.sharedWiFiClient;
+    if( !wifiClient ) {
+        wifiClient = CWWiFiClient.sharedWiFiClient;
     }
 
-    if ( !self.currentInterface) {
-        self.currentInterface = self.wifiClient.interface;
+    if ( !currentInterface) {
+        currentInterface = wifiClient.interface;
     }
 
 	// populate interfaces popup with all supported interfaces
@@ -312,7 +354,7 @@
 	[joinSpinner setHidden:YES];
 	[ibssSpinner setHidden:YES];
 	
-#if 1 //***
+#if 1 //*** TODO notifications using client::startMonitoringEventsWithType...
     // register for notifcations
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleNotification::) name:CWModeDidChangeNotification object:nil];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(handleNotification:) name:CWSSIDDidChangeNotification object:nil];
@@ -340,11 +382,11 @@
 #pragma mark IBAction Methods
 - (IBAction)interfaceSelected:(id)sender
 {
-    if( !self.wifiClient ) {
-        self.wifiClient = CWWiFiClient.sharedWiFiClient;
+    if( !wifiClient ) {
+        wifiClient = CWWiFiClient.sharedWiFiClient;
     }
-    if( !self.currentInterface ) {
-        self.currentInterface = [self.wifiClient interface];
+    if( !currentInterface ) {
+        currentInterface = [wifiClient interface];
     }
 	[self updateInterfaceInfoTab];
 }
@@ -457,7 +499,7 @@
 
 - (IBAction)joinOKButtonPressed:(id)sender
 {
-#if 0 //$$$
+#if 0 //$$$ todo
 	CW8021XProfile *user8021XProfile = nil;
 	
 	[joinSpinner setHidden:NO];
@@ -516,7 +558,7 @@
 		
 		[joinNetworkNameField setStringValue:self.selectedNetwork.ssid];
 		[joinNetworkNameField setEnabled:NO];
-#if 0 //$$$
+#if 0 //$$$ todo
 		[joinSecurityPopupButton selectItemWithTitle:[self stringForSecurityMode:self.selectedNetwork.securityMode]];
 		[joinSecurityPopupButton setEnabled:NO];
 		[self changeSecurityMode:nil];
@@ -566,7 +608,7 @@
 	NSString *passphrase = [ibssPassphraseField stringValue];
 	
 	NSMutableDictionary *ibssParams = [NSMutableDictionary dictionaryWithCapacity:0];
-#if 0//$$$
+#if 0//$$$ todo
 	if( networkName && [networkName length] )
 		[ibssParams setValue:networkName forKey:kCWIBSSKeySSID];
 	if( channel && [channel intValue] > 0 )
@@ -625,8 +667,10 @@
 	[NSApp beginSheet:ibssDialogWindow modalForWindow:mainWindow modalDelegate:self didEndSelector:nil contextInfo:nil];
 }
 
+
 #pragma mark -
 #pragma mark NSTableDataSource Protocol
+
 - (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row;
 {
 	if( tableView == scanResultsTable )
@@ -641,9 +685,9 @@
 			if( tableColumn == channelColumn )
                 return [NSNumber numberWithInt: [[network wlanChannel] channelNumber]].stringValue;
 			if( tableColumn == phyModeColumn )
-                return @"FakePhyMode"; //[self stringForPHYMode:[network ]];  => supportsPHYMode
+                return stringForNeigbPhy(network);
 			if( tableColumn == securityModeColumn )
-                return @"FakeSecm";//$$$[self stringForSecurityMode:[network securityMode]]; => supportsSecurity
+                return stringForNeigbSecurity(network);
 			if( tableColumn == rssiColumn )
 				return [NSNumber numberWithLong:[network rssiValue]].stringValue;
 			if( tableColumn == ibssColumn )

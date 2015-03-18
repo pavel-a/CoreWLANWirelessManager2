@@ -1,14 +1,18 @@
-**** pa01
+**** pa01 March 2015
 
-Port to Xcode 6.1 and Yosemite
-
-TODO refresh main form not working
+Update to Xcode 6.1 and Yosemite version of CoreWLAN
 
 TODO: all action commands
 
 TODO: fix GUI related warnings
+TODO: notifications new style (via client class)
+TODO: replace other deprecated APIs
 
-TODO: sanitize SSID strings
+TODO: sanitize SSID strings in scan result?
+
+?? How to get own PHY modes of interface?
+?? Why the associated AP won't always show up in scan results?
+?? Own supported channels: why 3 times? Group by band/phy or dedup?
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
