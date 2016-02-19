@@ -44,6 +44,12 @@
 		case kCWPHYMode11n:
 			phyModeStr = @"802.11n";
 			break;
+		case kCWPHYMode11ac:
+			phyModeStr = "802.11ac";
+			break;
+		default:
+			phyModeStr = "?unknown mode?";
+			break;
 	}
 	return phyModeStr;
 }
